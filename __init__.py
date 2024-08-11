@@ -1,15 +1,12 @@
 import pygame
 import numpy as np
 
-# Initialize Pygame
 pygame.init()
 
-# Screen dimensions
 WIDTH, HEIGHT = 800, 600
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("3D Rotator")
+pygame.display.set_caption("Simple 3D Engine - By Theo Slater ")
 
-# Cube vertices
 vertices = np.array([
     [-1, -1, -1],
     [1, -1, -1],
@@ -21,7 +18,6 @@ vertices = np.array([
     [-1, 1, 1]
 ])
 
-# Cube edges
 edges = [
     (0, 1), (1, 2), (2, 3), (3, 0),
     (4, 5), (5, 6), (6, 7), (7, 4),
@@ -78,17 +74,14 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_x:
-                    angle_x += 0.1
-                elif event.key == pygame.K_y:
-                    angle_y += 0.1
-                elif event.key == pygame.K_z:
-                    angle_z += 0.1
 
         screen.fill((0, 0, 0))
 
-        rotation_matrix = np.dot(rotate_x(angle_x), np.dot(rotate_y(angle_y), rotate_z(angle_z)))
+        angle_x += 0.01
+        angle_y += 0.01
+        angle_z += 0.01
+
+        rotation_matrix = np.dot(np.dot(rotate_x(angle_x), rotate_y(angle_y)), rotate_z(angle_z))
         rotated_vertices = np.dot(vertices, rotation_matrix)
         projected_vertices = project(rotated_vertices)
 
