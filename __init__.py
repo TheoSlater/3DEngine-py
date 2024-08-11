@@ -1,7 +1,6 @@
 import pygame as pg
 import numpy as np
 
-# Initialize Pygame
 pg.init()
 
 WIDTH, HEIGHT = 800, 600
@@ -59,11 +58,9 @@ def rotate_y(angle):
 def project(points, scale=100):
     return [(int(p[0] * scale) + WIDTH // 2, int(p[1] * scale) + HEIGHT // 2) for p in points]
 
-def calculate_normal(v1, v2, v3):
-    edge1 = v2 - v1
-    edge2 = v3 - v1
-    normal = np.cross(edge1, edge2)
-    return normal / np.linalg.norm(normal)  # Normalize the normal vector
+def calculate_face_depth(vertices):
+    z_values = [v[2] for v in vertices]
+    return np.mean(z_values)
 
 class Camera:
     def __init__(self):
@@ -73,7 +70,7 @@ class Camera:
         self.last_mouse_pos = None
 
     def control(self):
-        if pg.mouse.get_pressed()[2]:  # Right mouse button
+        if pg.mouse.get_pressed()[2]:
             mouse_x, mouse_y = pg.mouse.get_pos()
             if self.last_mouse_pos:
                 dx, dy = mouse_x - self.last_mouse_pos[0], mouse_y - self.last_mouse_pos[1]
@@ -108,22 +105,21 @@ def main():
         rotated_vertices = np.dot(translated_vertices, rotation_matrix)
         projected_vertices = project(rotated_vertices)
 
-        # List to keep track of visible faces
-        visible_faces = []
+        face_data = []
 
         for i, face in enumerate(faces):
             face_vertices = [rotated_vertices[v] for v in face]
-            normal = calculate_normal(*face_vertices[:3])
-            face_center = np.mean(face_vertices, axis=0)
-            to_camera = cam_pos - face_center
+            polygon = [projected_vertices[v] for v in face]
+            avg_z = calculate_face_depth(face_vertices)
+            face_data.append((avg_z, i, polygon))
 
-            if np.dot(normal, to_camera) < 0:  # Face is visible
-                visible_faces.append((i, [projected_vertices[v] for v in face]))
+        face_data.sort(key=lambda x: x[0], reverse=True)
 
-        # Draw faces
-        for i, polygon in visible_faces:
-            pg.draw.polygon(screen, face_colors[i], polygon)  # Fill face
-            pg.draw.polygon(screen, (0, 0, 0), polygon, 1)    # Outline face
+        for _, i, polygon in face_data:
+            pg.draw.polygon(screen, face_colors[i], polygon)
+            outline_width = 3
+            for offset in range(outline_width):
+                pg.draw.polygon(screen, (0, 0, 0), polygon, 1)
 
         pg.display.flip()
         clock.tick(60)
