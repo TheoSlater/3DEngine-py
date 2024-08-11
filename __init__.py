@@ -1,5 +1,6 @@
 import pygame as pg
 import numpy as np
+from ui import draw_ui
 
 pg.init()
 
@@ -7,6 +8,7 @@ WIDTH, HEIGHT = 800, 600
 screen = pg.display.set_mode((WIDTH, HEIGHT))
 pg.display.set_caption("3D Camera Orbit with Mouse")
 
+# Define the vertices, edges, faces, and colors for the 3D cube
 vertices = np.array([
     [-1, -1, -1],
     [1, -1, -1],
@@ -97,16 +99,19 @@ def main():
                 running = False
 
         camera.control()
+
+        # Clear the screen
         screen.fill((0, 0, 0))
 
+        # Calculate the camera position and apply transformations
         cam_pos = camera.get_position()
         translated_vertices = vertices
         rotation_matrix = np.dot(rotate_x(camera.angle_pitch), rotate_y(camera.angle_yaw))
         rotated_vertices = np.dot(translated_vertices, rotation_matrix)
         projected_vertices = project(rotated_vertices)
 
+        # Draw the 3D cube
         face_data = []
-
         for i, face in enumerate(faces):
             face_vertices = [rotated_vertices[v] for v in face]
             polygon = [projected_vertices[v] for v in face]
@@ -117,9 +122,12 @@ def main():
 
         for _, i, polygon in face_data:
             pg.draw.polygon(screen, face_colors[i], polygon)
-            outline_width = 3
+            outline_width = 0
             for offset in range(outline_width):
                 pg.draw.polygon(screen, (0, 0, 0), polygon, 1)
+
+        # Draw the UI on top
+        draw_ui(screen)
 
         pg.display.flip()
         clock.tick(60)
