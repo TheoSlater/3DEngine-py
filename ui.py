@@ -1,10 +1,7 @@
 import dearpygui.dearpygui as dpg
 
-def create_ui(width, height, button_callback, color_callbacks, face_colors):
+def create_ui(width, height, button_callback, color_callbacks, face_colors, toggle_raycasting, toggle_lighting, toggle_ssaa):
     dpg.create_context()
-
-    with dpg.handler_registry():
-        dpg.add_mouse_drag_handler(callback=mouse_drag_handler)
 
     def resize_ui(sender, app_data):
         new_width, new_height = dpg.get_viewport_client_width(), dpg.get_viewport_client_height()
@@ -31,14 +28,10 @@ def create_ui(width, height, button_callback, color_callbacks, face_colors):
                         callback=callback,
                         default_value=face_colors[i] + (255,)
                     )
-            
-            # Add a checkbox to toggle raycasting lines
-            def toggle_raycasting(sender, app_data):
-                # Toggle raycasting lines flag
-                global show_rays
-                show_rays = app_data
 
             dpg.add_checkbox(label="Show Raycasting Lines", callback=toggle_raycasting)
+            dpg.add_checkbox(label="Enable Lighting", callback=toggle_lighting, default_value=True)
+            dpg.add_checkbox(label="Enable SSAA", callback=toggle_ssaa, tag="ssaa_checkbox", default_value=False)
 
     dpg.create_viewport(title='3D Cube Viewer', width=width, height=height, resizable=True)
     dpg.setup_dearpygui()

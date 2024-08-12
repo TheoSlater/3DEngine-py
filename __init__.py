@@ -7,6 +7,11 @@ from ui import create_ui, render_ui
 pg.init()
 
 WIDTH, HEIGHT = 800, 600
+SSAA_SCALE = 12  # Scale factor for SSAA, use 2 for 2x SSAA
+
+# Define high-resolution surface for SSAA
+high_res_surface = pg.Surface((WIDTH * SSAA_SCALE, HEIGHT * SSAA_SCALE))
+
 screen = pg.display.set_mode((WIDTH, HEIGHT))
 pg.display.set_caption("3D Camera Orbit with Mouse")
 
@@ -114,6 +119,12 @@ def update_color_picker(i, sender, app_data):
     except Exception as e:
         print(f"Error updating color for face {i if i is not None else 'unknown'}: {e}")
 
+def is_face_facing_light(normal, face_center):
+    """Check if the face is facing the light source."""
+    light_dir = light_pos - face_center
+    light_dir = light_dir / np.linalg.norm(light_dir)
+    return np.dot(normal, light_dir) > 0
+
 class Camera:
     def __init__(self):
         self.angle_pitch = self.angle_yaw = 0
@@ -122,7 +133,7 @@ class Camera:
         self.last_mouse_pos = None
 
     def control(self):
-        if pg.mouse.get_pressed()[2]:
+        if pg.mouse.get_pressed()[1]:
             mouse_x, mouse_y = pg.mouse.get_pos()
             if self.last_mouse_pos:
                 dx, dy = mouse_x - self.last_mouse_pos[0], mouse_y - self.last_mouse_pos[1]
@@ -142,14 +153,31 @@ def main():
     clock = pg.time.Clock()
     camera = Camera()
     
+    show_rays = False  # Flag to toggle raycasting lines
+    lighting_enabled = True  # Flag to toggle lighting
+    ssaa_enabled = False  # Flag to toggle SSAA
+
+    def toggle_raycasting(sender, app_data):
+        nonlocal show_rays
+        show_rays = app_data
+        print(f"Raycasting {'enabled' if show_rays else 'disabled'}")
+    
+    def toggle_lighting(sender, app_data):
+        nonlocal lighting_enabled
+        lighting_enabled = app_data
+        print(f"Lighting {'enabled' if lighting_enabled else 'disabled'}")
+
+    def toggle_ssaa(sender, app_data):
+        nonlocal ssaa_enabled
+        ssaa_enabled = app_data
+        print(f"SSAA {'enabled' if ssaa_enabled else 'disabled'}")
+
     # Ensure that each face has its own callback correctly initialized
     color_callbacks = [lambda sender, app_data, i=i: update_color_picker(i, sender, app_data) for i in range(6)]
     
     # Pass the update_face_colors function and color picker callbacks
-    create_ui(WIDTH, HEIGHT, update_face_colors, color_callbacks, face_colors)
+    create_ui(WIDTH, HEIGHT, update_face_colors, color_callbacks, face_colors, toggle_raycasting, toggle_lighting, toggle_ssaa)
     
-    show_rays = False  # Flag to toggle raycasting lines
-
     running = True
 
     while running:
@@ -159,9 +187,15 @@ def main():
             if event.type == pg.KEYDOWN:
                 if event.key == pg.K_r:  # Toggle raycasting lines with the 'R' key
                     show_rays = not show_rays
+                if event.key == pg.K_l:  # Toggle lighting with the 'L' key
+                    lighting_enabled = not lighting_enabled
+                    print(f"Lighting {'enabled' if lighting_enabled else 'disabled'}")
 
         camera.control()
-        screen.fill((0, 0, 0))
+
+        # Clear high-resolution surface if SSAA is enabled
+        if ssaa_enabled:
+            high_res_surface.fill((0, 0, 0))
 
         cam_pos = camera.get_position()
         translated_vertices = vertices
@@ -174,32 +208,49 @@ def main():
             face_vertices = [rotated_vertices[v] for v in face]
             face_center = np.mean(face_vertices, axis=0)
             face_normal = compute_face_normal(face_vertices)
-            face_lighting = compute_lighting(face_normal, face_center)
-            face_color = np.array(face_colors[i]) * face_lighting
+
+            if lighting_enabled:
+                face_lighting = compute_lighting(face_normal, face_center)
+                face_color = np.array(face_colors[i]) * face_lighting
+            else:
+                face_color = np.array(face_colors[i])
+                
             face_color = np.clip(face_color, 0, 255).astype(int)
             face_distance = calculate_face_depth(face_vertices)
-            face_distances.append((i, face_distance, [projected_vertices[v] for v in face], face_color, face_center))
+            face_distances.append((i, face_distance, [projected_vertices[v] for v in face], face_color, face_center, face_normal))
 
         # Sort faces based on their distance from the camera (further faces first)
         face_distances.sort(key=lambda x: x[1], reverse=True)
 
         # Draw faces in the sorted order to ensure proper depth rendering
-        for i, _, polygon, color, _ in face_distances:
-            pg.draw.polygon(screen, tuple(color), polygon)
-
-        if show_rays:
-            # Draw lines from light source to the cube
-            light_pos_screen = project([light_pos])[0]
-            for _, _, polygon, _, face_center in face_distances:
-                face_center_screen = project([face_center])[0]
-                pg.draw.line(screen, (255, 255, 255), light_pos_screen, face_center_screen, 1)
+        if ssaa_enabled:
+            # Draw faces on the high-resolution surface
+            for i, _, polygon, color, _, _ in face_distances:
+                # Use anti-aliased polygons if desired
+                pg.draw.polygon(high_res_surface, tuple(color), [(int(p[0] * SSAA_SCALE), int(p[1] * SSAA_SCALE)) for p in polygon])
+            
+            # Downsample high-resolution surface to the final screen resolution
+            scaled_surface = pg.transform.scale(high_res_surface, (WIDTH, HEIGHT))
+            screen.blit(scaled_surface, (0, 0))
+        else:
+            for i, _, polygon, color, _, _ in face_distances:
+                # Draw faces directly on the screen
+                pg.draw.polygon(screen, tuple(color), polygon)
         
+        # Add Raycasting lines
+        if show_rays:
+            light_pos_screen = project([light_pos])[0]
+            for _, _, polygon, _, face_center, face_normal in face_distances:
+                face_center_screen = project([face_center])[0]
+                ray_color = (255, 0, 0) if not is_face_facing_light(face_normal, face_center) else (255, 255, 255)
+                pg.draw.line(screen, ray_color, light_pos_screen, face_center_screen, 1)
+
         render_ui()
         pg.display.flip()
         clock.tick(60)
 
     dpg.destroy_context()
     pg.quit()
-    
+
 if __name__ == "__main__":
     main()
