@@ -1,8 +1,7 @@
 import pygame as pg
 import numpy as np
-import dearpygui.dearpygui as dpg
 import random
-from ui import create_ui, render_ui
+from obj_loader import load_obj  # Import function to load OBJ files
 
 pg.init()
 
@@ -14,39 +13,6 @@ high_res_surface = pg.Surface((WIDTH * SSAA_SCALE, HEIGHT * SSAA_SCALE))
 
 screen = pg.display.set_mode((WIDTH, HEIGHT))
 pg.display.set_caption("3D Camera Orbit with Mouse")
-
-# Define vertices, edges, faces, and face colors
-vertices = np.array([
-    [-1, -1, -1],
-    [1, -1, -1],
-    [1, 1, -1],
-    [-1, 1, -1],
-    [-1, -1, 1],
-    [1, -1, 1],
-    [1, 1, 1],
-    [-1, 1, 1]
-])
-edges = [
-    (0, 1), (1, 2), (2, 3), (3, 0),
-    (4, 5), (5, 6), (6, 7), (7, 4),
-    (0, 4), (1, 5), (2, 6), (3, 7)
-]
-faces = [
-    [0, 1, 2, 3],  # Front face
-    [4, 5, 6, 7],  # Back face
-    [0, 1, 5, 4],  # Bottom face
-    [2, 3, 7, 6],  # Top face
-    [1, 2, 6, 5],  # Right face
-    [0, 3, 7, 4]   # Left face
-]
-face_colors = [
-    (255, 0, 0),   # Red
-    (0, 255, 0),   # Green
-    (0, 0, 255),   # Blue
-    (255, 255, 0), # Yellow
-    (255, 0, 255), # Magenta
-    (0, 255, 255)  # Cyan
-]
 
 # Define a static light source position (e.g., top-right)
 light_pos = np.array([5, 5, 5])  # Static light source
@@ -95,30 +61,6 @@ def compute_lighting(normal, face_center):
     diffuse = max(dot_product, 0) * diffuse_light
     return ambient_light + diffuse
 
-def update_face_colors():
-    """Change the colors of the cube faces to random colors and update the color pickers."""
-    global face_colors
-    face_colors = [(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)) for _ in face_colors]
-
-    # Convert colors to the [0.0, 1.0] range and update color pickers
-    for i, color in enumerate(face_colors):
-        dpg.set_value(f"color_picker_{i}", [c / 255.0 for c in color])  # Update color picker value
-        print(f"Face {i + 1} color randomized to {face_colors[i]}")
-
-def update_color_picker(i, sender, app_data):
-    """Update face color from color picker."""
-    try:
-        color = app_data
-        if i is not None and color is not None and len(color) >= 3:  # Ensure there is color data
-            # Convert the color from [0.0, 1.0] range to [0, 255] range
-            color = tuple(int(c * 255) for c in color[:3])
-            face_colors[i] = color
-            print(f"Face {i + 1} color updated to {face_colors[i]}")
-        else:
-            print(f"Received invalid data for face {i if i is not None else 'unknown'}")
-    except Exception as e:
-        print(f"Error updating color for face {i if i is not None else 'unknown'}: {e}")
-
 def is_face_facing_light(normal, face_center):
     """Check if the face is facing the light source."""
     light_dir = light_pos - face_center
@@ -152,32 +94,13 @@ class Camera:
 def main():
     clock = pg.time.Clock()
     camera = Camera()
-    
+
+    # Load the OBJ file
+    vertices, faces, face_colors = load_obj('path/to/your/model.obj')
+
     show_rays = False  # Flag to toggle raycasting lines
     lighting_enabled = True  # Flag to toggle lighting
-    ssaa_enabled = False  # Flag to toggle SSAA
 
-    def toggle_raycasting(sender, app_data):
-        nonlocal show_rays
-        show_rays = app_data
-        print(f"Raycasting {'enabled' if show_rays else 'disabled'}")
-    
-    def toggle_lighting(sender, app_data):
-        nonlocal lighting_enabled
-        lighting_enabled = app_data
-        print(f"Lighting {'enabled' if lighting_enabled else 'disabled'}")
-
-    def toggle_ssaa(sender, app_data):
-        nonlocal ssaa_enabled
-        ssaa_enabled = app_data
-        print(f"SSAA {'enabled' if ssaa_enabled else 'disabled'}")
-
-    # Ensure that each face has its own callback correctly initialized
-    color_callbacks = [lambda sender, app_data, i=i: update_color_picker(i, sender, app_data) for i in range(6)]
-    
-    # Pass the update_face_colors function and color picker callbacks
-    create_ui(WIDTH, HEIGHT, update_face_colors, color_callbacks, face_colors, toggle_raycasting, toggle_lighting, toggle_ssaa)
-    
     running = True
 
     while running:
@@ -194,11 +117,11 @@ def main():
         camera.control()
 
         # Clear high-resolution surface if SSAA is enabled
-        if ssaa_enabled:
+        if SSAA_SCALE > 1:
             high_res_surface.fill((0, 0, 0))
 
         cam_pos = camera.get_position()
-        translated_vertices = vertices
+        translated_vertices = np.array(vertices)
         rotation_matrix = np.dot(rotate_x(camera.angle_pitch), rotate_y(camera.angle_yaw))
         rotated_vertices = np.dot(translated_vertices, rotation_matrix)
         projected_vertices = project(rotated_vertices)
@@ -223,7 +146,7 @@ def main():
         face_distances.sort(key=lambda x: x[1], reverse=True)
 
         # Draw faces in the sorted order to ensure proper depth rendering
-        if ssaa_enabled:
+        if SSAA_SCALE > 1:
             # Draw faces on the high-resolution surface
             for i, _, polygon, color, _, _ in face_distances:
                 # Use anti-aliased polygons if desired
@@ -245,11 +168,9 @@ def main():
                 ray_color = (255, 0, 0) if not is_face_facing_light(face_normal, face_center) else (255, 255, 255)
                 pg.draw.line(screen, ray_color, light_pos_screen, face_center_screen, 1)
 
-        render_ui()
         pg.display.flip()
         clock.tick(60)
 
-    dpg.destroy_context()
     pg.quit()
 
 if __name__ == "__main__":
