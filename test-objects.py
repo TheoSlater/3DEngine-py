@@ -15,6 +15,7 @@ pg.display.set_caption("3D Camera Orbit with Mouse")
 # Initialize font for FPS display
 font = pg.font.SysFont(None, 36)
 
+# Define lighting
 light_pos = np.array([5, 5, 5])
 ambient_light = 0.2
 diffuse_light = 0.8
@@ -37,6 +38,32 @@ def rotate_y(angle):
 
 def project(points, scale=100):
     return [(int(p[0] * scale) + WIDTH // 2, int(p[1] * scale) + HEIGHT // 2) for p in points]
+
+def compute_face_normal(face_vertices):
+    """Calculate the normal vector for a face."""
+    if len(face_vertices) < 3:
+        raise ValueError("Face vertices must contain at least 3 vertices.")
+    
+    # Use the first triangle to compute the normal
+    v0, v1, v2 = face_vertices[:3]
+    edge1 = v1 - v0
+    edge2 = v2 - v0
+    normal = np.cross(edge1, edge2)
+    norm_length = np.linalg.norm(normal)
+    return normal / norm_length if norm_length > 0 else normal
+
+def compute_lighting(normal, face_center):
+    """Compute the lighting for a face based on its normal and the light source position."""
+    light_dir = light_pos - face_center
+    light_dir /= np.linalg.norm(light_dir)
+    diffuse = max(np.dot(normal, light_dir), 0) * diffuse_light
+    return ambient_light + diffuse
+
+def is_face_facing_light(normal, face_center):
+    """Check if the face is facing the light source."""
+    light_dir = light_pos - face_center
+    light_dir /= np.linalg.norm(light_dir)
+    return np.dot(normal, light_dir) > 0
 
 class Camera:
     def __init__(self):
@@ -70,12 +97,11 @@ def main():
 
     show_rays = False
 
-    running = True
-
-    while running:
+    while True:
         for event in pg.event.get():
             if event.type == pg.QUIT:
-                running = False
+                pg.quit()
+                return
             if event.type == pg.KEYDOWN:
                 if event.key == pg.K_r:
                     show_rays = not show_rays
@@ -91,25 +117,40 @@ def main():
         rotated_vertices = np.dot(translated_vertices, rotation_matrix)
         projected_vertices = project(rotated_vertices)
 
-        if SSAA_SCALE > 1:
-            for v in projected_vertices:
-                pg.draw.circle(high_res_surface, (0, 255, 0), (int(v[0] * SSAA_SCALE), int(v[1] * SSAA_SCALE)), 3)
-            for edge in edges:
-                pg.draw.line(high_res_surface, (0, 255, 0), 
-                             (int(projected_vertices[edge[0]][0] * SSAA_SCALE), int(projected_vertices[edge[0]][1] * SSAA_SCALE)),
-                             (int(projected_vertices[edge[1]][0] * SSAA_SCALE), int(projected_vertices[edge[1]][1] * SSAA_SCALE)), 1)
+        face_distances = []
+        for i, face in enumerate(faces):
+            face_vertices = [rotated_vertices[v] for v in face]
+            if len(face_vertices) < 3:
+                continue  # Skip faces with fewer than 3 vertices
             
+            face_center = np.mean(face_vertices, axis=0)
+            face_normal = compute_face_normal(face_vertices)
+
+            face_lighting = compute_lighting(face_normal, face_center)
+            face_color = np.array([255, 255, 255]) * face_lighting
+            face_color = np.clip(face_color, 0, 255).astype(int)
+            face_distance = np.mean([v[2] for v in face_vertices])
+            face_distances.append((i, face_distance, [projected_vertices[v] for v in face], face_color, face_center, face_normal))
+
+        face_distances.sort(key=lambda x: x[1], reverse=True)
+
+        if SSAA_SCALE > 1:
+            for _, _, polygon, color, _, _ in face_distances:
+                pg.draw.polygon(high_res_surface, tuple(color), [(int(p[0] * SSAA_SCALE), int(p[1] * SSAA_SCALE)) for p in polygon])
+
             scaled_surface = pg.transform.scale(high_res_surface, (WIDTH, HEIGHT))
             screen.blit(scaled_surface, (0, 0))
         else:
-            for v in projected_vertices:
-                pg.draw.circle(screen, (0, 255, 0), (int(v[0]), int(v[1])), 3)
-            for edge in edges:
-                pg.draw.line(screen, (0, 255, 0), 
-                             projected_vertices[edge[0]], 
-                             projected_vertices[edge[1]], 1)
+            for _, _, polygon, color, _, _ in face_distances:
+                pg.draw.polygon(screen, tuple(color), polygon)
 
-        # Display FPS
+        if show_rays:
+            light_pos_screen = project([light_pos])[0]
+            for _, _, polygon, _, face_center, face_normal in face_distances:
+                face_center_screen = project([face_center])[0]
+                ray_color = (255, 0, 0) if not is_face_facing_light(face_normal, face_center) else (255, 255, 255)
+                pg.draw.line(screen, ray_color, light_pos_screen, face_center_screen, 1)
+
         fps = clock.get_fps()
         fps_text = font.render(f"FPS: {int(fps)}", True, (255, 255, 255))
         screen.blit(fps_text, (10, 10))
@@ -117,7 +158,6 @@ def main():
         pg.display.flip()
         clock.tick(120)
 
-    pg.quit()
-
 if __name__ == "__main__":
     main()
+
