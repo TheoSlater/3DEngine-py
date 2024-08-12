@@ -10,6 +10,7 @@ WIDTH, HEIGHT = 800, 600
 screen = pg.display.set_mode((WIDTH, HEIGHT))
 pg.display.set_caption("3D Camera Orbit with Mouse")
 
+# Define vertices, edges, faces, and face colors
 vertices = np.array([
     [-1, -1, -1],
     [1, -1, -1],
@@ -42,6 +43,11 @@ face_colors = [
     (0, 255, 255)  # Cyan
 ]
 
+# Light source position and intensity
+light_pos = np.array([0, 5, 5])
+ambient_light = 0.2
+diffuse_light = 0.8
+
 def rotate_x(angle):
     cos_angle, sin_angle = np.cos(angle), np.sin(angle)
     return np.array([
@@ -67,6 +73,23 @@ def calculate_face_depth(face_vertices):
     depths = [np.dot(v - cam_pos, np.array([0, 0, 1])) for v in face_vertices]
     return np.mean(depths)
 
+def compute_face_normal(face_vertices):
+    """Calculate the normal vector for a face."""
+    v0, v1, v2 = face_vertices[0], face_vertices[1], face_vertices[2]
+    edge1 = v1 - v0
+    edge2 = v2 - v0
+    normal = np.cross(edge1, edge2)
+    norm_length = np.linalg.norm(normal)
+    return normal / norm_length if norm_length > 0 else normal
+
+def compute_lighting(normal, face_center):
+    """Compute the lighting for a face based on its normal and the light source position."""
+    light_dir = light_pos - face_center
+    light_dir = light_dir / np.linalg.norm(light_dir)
+    dot_product = np.dot(normal, light_dir)
+    diffuse = max(dot_product, 0) * diffuse_light
+    return ambient_light + diffuse
+
 def update_face_colors():
     """Change the colors of the cube faces to random colors and update the color pickers."""
     global face_colors
@@ -76,8 +99,6 @@ def update_face_colors():
     for i, color in enumerate(face_colors):
         dpg.set_value(f"color_picker_{i}", [c / 255.0 for c in color])  # Update color picker value
         print(f"Face {i + 1} color randomized to {face_colors[i]}")
-
-
 
 def update_color_picker(i, sender, app_data):
     """Update face color from color picker."""
@@ -146,15 +167,20 @@ def main():
         face_distances = []
         for i, face in enumerate(faces):
             face_vertices = [rotated_vertices[v] for v in face]
+            face_center = np.mean(face_vertices, axis=0)
+            face_normal = compute_face_normal(face_vertices)
+            face_lighting = compute_lighting(face_normal, face_center)
+            face_color = np.array(face_colors[i]) * face_lighting
+            face_color = np.clip(face_color, 0, 255).astype(int)
             face_distance = calculate_face_depth(face_vertices)
-            face_distances.append((i, face_distance, [projected_vertices[v] for v in face]))
+            face_distances.append((i, face_distance, [projected_vertices[v] for v in face], face_color))
 
         # Sort faces based on their distance from the camera (further faces first)
         face_distances.sort(key=lambda x: x[1], reverse=True)
 
         # Draw faces in the sorted order to ensure proper depth rendering
-        for i, _, polygon in face_distances:
-            pg.draw.polygon(screen, face_colors[i], polygon)
+        for i, _, polygon, color in face_distances:
+            pg.draw.polygon(screen, tuple(color), polygon)
 
         # HACK: Issues with seeing outlines through cube faces. Disabling for now.
         #for edge in edges:
@@ -169,4 +195,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
