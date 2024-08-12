@@ -40,12 +40,12 @@ faces = [
     [0, 3, 7, 4]   # Left face
 ]
 face_colors = [
-    (255, 0, 0),   # Red
-    (0, 255, 0),   # Green
-    (0, 0, 255),   # Blue
-    (255, 255, 0), # Yellow
-    (255, 0, 255), # Magenta
-    (0, 255, 255)  # Cyan
+    (255, 255, 255),   # White
+    (255, 255, 255),   # White
+    (255, 255, 255),   # White
+    (255, 255, 255),   # White
+    (255, 255, 255),   # White
+    (255, 255, 255),   # White
 ]
 
 # Define a static light source position (e.g., top-right)
