@@ -135,7 +135,7 @@ class Camera:
         self.last_mouse_pos = None
 
     def control(self):
-        if pg.mouse.get_pressed()[1]:
+        if pg.mouse.get_pressed()[0]:
             mouse_x, mouse_y = pg.mouse.get_pos()
             if self.last_mouse_pos:
                 dx, dy = mouse_x - self.last_mouse_pos[0], mouse_y - self.last_mouse_pos[1]
