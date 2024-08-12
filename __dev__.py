@@ -5,12 +5,15 @@ from obj_loader import load_obj
 pg.init()
 
 WIDTH, HEIGHT = 800, 600
-SSAA_SCALE = 12
+SSAA_SCALE = 2
 
 high_res_surface = pg.Surface((WIDTH * SSAA_SCALE, HEIGHT * SSAA_SCALE))
 
 screen = pg.display.set_mode((WIDTH, HEIGHT))
 pg.display.set_caption("3D Camera Orbit with Mouse")
+
+# Initialize font for FPS display
+font = pg.font.SysFont(None, 36)
 
 light_pos = np.array([5, 5, 5])
 ambient_light = 0.2
@@ -106,8 +109,13 @@ def main():
                              projected_vertices[edge[0]], 
                              projected_vertices[edge[1]], 1)
 
+        # Display FPS
+        fps = clock.get_fps()
+        fps_text = font.render(f"FPS: {int(fps)}", True, (255, 255, 255))
+        screen.blit(fps_text, (10, 10))
+
         pg.display.flip()
-        clock.tick(60)
+        clock.tick(120)
 
     pg.quit()
 
