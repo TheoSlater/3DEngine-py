@@ -1,6 +1,8 @@
 import pygame as pg
 import numpy as np
-from ui import draw_ui
+import dearpygui.dearpygui as dpg
+import random
+from ui import create_ui, render_ui
 
 pg.init()
 
@@ -8,7 +10,6 @@ WIDTH, HEIGHT = 800, 600
 screen = pg.display.set_mode((WIDTH, HEIGHT))
 pg.display.set_caption("3D Camera Orbit with Mouse")
 
-# Define the vertices, edges, faces, and colors for the 3D cube
 vertices = np.array([
     [-1, -1, -1],
     [1, -1, -1],
@@ -60,9 +61,37 @@ def rotate_y(angle):
 def project(points, scale=100):
     return [(int(p[0] * scale) + WIDTH // 2, int(p[1] * scale) + HEIGHT // 2) for p in points]
 
-def calculate_face_depth(vertices):
-    z_values = [v[2] for v in vertices]
-    return np.mean(z_values)
+def calculate_face_depth(face_vertices):
+    """Calculate the average depth of the face vertices relative to the camera."""
+    cam_pos = np.array([0, 0, 0])  # Camera at the origin
+    depths = [np.dot(v - cam_pos, np.array([0, 0, 1])) for v in face_vertices]
+    return np.mean(depths)
+
+def update_face_colors():
+    """Change the colors of the cube faces to random colors and update the color pickers."""
+    global face_colors
+    face_colors = [(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)) for _ in face_colors]
+
+    # Convert colors to the [0.0, 1.0] range and update color pickers
+    for i, color in enumerate(face_colors):
+        dpg.set_value(f"color_picker_{i}", [c / 255.0 for c in color])  # Update color picker value
+        print(f"Face {i + 1} color randomized to {face_colors[i]}")
+
+
+
+def update_color_picker(i, sender, app_data):
+    """Update face color from color picker."""
+    try:
+        color = app_data
+        if i is not None and color is not None and len(color) >= 3:  # Ensure there is color data
+            # Convert the color from [0.0, 1.0] range to [0, 255] range
+            color = tuple(int(c * 255) for c in color[:3])
+            face_colors[i] = color
+            print(f"Face {i + 1} color updated to {face_colors[i]}")
+        else:
+            print(f"Received invalid data for face {i if i is not None else 'unknown'}")
+    except Exception as e:
+        print(f"Error updating color for face {i if i is not None else 'unknown'}: {e}")
 
 class Camera:
     def __init__(self):
@@ -91,6 +120,13 @@ class Camera:
 def main():
     clock = pg.time.Clock()
     camera = Camera()
+    
+    # Ensure that each face has its own callback correctly initialized
+    color_callbacks = [lambda sender, app_data, i=i: update_color_picker(i, sender, app_data) for i in range(6)]
+    
+    # Pass the update_face_colors function and color picker callbacks
+    create_ui(WIDTH, HEIGHT, update_face_colors, color_callbacks, face_colors)
+    
     running = True
 
     while running:
@@ -99,40 +135,38 @@ def main():
                 running = False
 
         camera.control()
-
-        # Clear the screen
         screen.fill((0, 0, 0))
 
-        # Calculate the camera position and apply transformations
         cam_pos = camera.get_position()
         translated_vertices = vertices
         rotation_matrix = np.dot(rotate_x(camera.angle_pitch), rotate_y(camera.angle_yaw))
         rotated_vertices = np.dot(translated_vertices, rotation_matrix)
         projected_vertices = project(rotated_vertices)
 
-        # Draw the 3D cube
-        face_data = []
+        face_distances = []
         for i, face in enumerate(faces):
             face_vertices = [rotated_vertices[v] for v in face]
-            polygon = [projected_vertices[v] for v in face]
-            avg_z = calculate_face_depth(face_vertices)
-            face_data.append((avg_z, i, polygon))
+            face_distance = calculate_face_depth(face_vertices)
+            face_distances.append((i, face_distance, [projected_vertices[v] for v in face]))
 
-        face_data.sort(key=lambda x: x[0], reverse=True)
+        # Sort faces based on their distance from the camera (further faces first)
+        face_distances.sort(key=lambda x: x[1], reverse=True)
 
-        for _, i, polygon in face_data:
+        # Draw faces in the sorted order to ensure proper depth rendering
+        for i, _, polygon in face_distances:
             pg.draw.polygon(screen, face_colors[i], polygon)
-            outline_width = 0
-            for offset in range(outline_width):
-                pg.draw.polygon(screen, (0, 0, 0), polygon, 1)
 
-        # Draw the UI on top
-        draw_ui(screen)
+        # HACK: Issues with seeing outlines through cube faces. Disabling for now.
+        #for edge in edges:
+            #pg.draw.line(screen, (0, 0, 0), projected_vertices[edge[0]], projected_vertices[edge[1]], 2)
 
+        render_ui()
         pg.display.flip()
         clock.tick(60)
 
+    dpg.destroy_context()
     pg.quit()
 
 if __name__ == "__main__":
     main()
+

@@ -1,31 +1,47 @@
-import pygame as pg
+import dearpygui.dearpygui as dpg
 
-# Constants for the UI
-BUTTON_COLOR = (0, 128, 255)
-BUTTON_HOVER_COLOR = (0, 100, 200)
-TEXT_COLOR = (255, 255, 255)
-BACKGROUND_COLOR = (30, 30, 30)  # This can be removed or replaced
-BUTTON_RADIUS = 10
-BUTTON_PADDING = 10
+def create_ui(width, height, button_callback, color_callbacks, face_colors):
+    dpg.create_context()
 
-def draw_ui(screen):
-    font = pg.font.Font(None, 36)
-    
-    # Draw title
-    title_text = font.render("3D Cube Viewer", True, TEXT_COLOR)
-    screen.blit(title_text, (BUTTON_PADDING, BUTTON_PADDING))
+    with dpg.handler_registry():
+        dpg.add_mouse_drag_handler(callback=mouse_drag_handler)
 
-    # Draw button
-    button_rect = pg.Rect(BUTTON_PADDING, 50, 150, 40)
-    mouse_pos = pg.mouse.get_pos()
-    if button_rect.collidepoint(mouse_pos):
-        button_color = BUTTON_HOVER_COLOR
-    else:
-        button_color = BUTTON_COLOR
-    
-    pg.draw.rect(screen, button_color, button_rect, border_radius=BUTTON_RADIUS)
-    
-    # Draw button text
-    button_text = font.render("Click Me", True, TEXT_COLOR)
-    text_rect = button_text.get_rect(center=button_rect.center)
-    screen.blit(button_text, text_rect)
+    # Define the resize callback function
+    def resize_ui(sender, app_data):
+        new_width, new_height = dpg.get_viewport_client_width(), dpg.get_viewport_client_height()
+        # Adjust the size of the main UI window
+        dpg.configure_item("ui_window", width=new_width // 4, height=new_height - 20)
+        # Adjust the size of the child window to fill the parent window
+        dpg.configure_item("child_window", width=-1, height=-1)
+
+    dpg.set_viewport_resize_callback(resize_ui)
+
+    with dpg.window(label="3D Cube Viewer", width=width // 4, height=height - 20, pos=(10, 10), tag="ui_window"):
+        dpg.add_text("3D Cube Viewer")
+
+        with dpg.child_window(tag="child_window", height=-1, width=-1):
+            with dpg.collapsing_header(label="Colours", default_open=True):
+                dpg.add_button(label="Randomize", callback=button_callback)
+
+                for i in range(6):
+                    # Define a closure to ensure that i is captured correctly
+                    def create_callback(index):
+                        return lambda sender, app_data: color_callbacks[index](sender, app_data)
+
+                    callback = create_callback(i)
+                    dpg.add_color_picker(
+                        label=f"Face {i + 1}",
+                        tag=f"color_picker_{i}",
+                        callback=callback,
+                        default_value=face_colors[i] + (255,)
+                    )
+
+    dpg.create_viewport(title='3D Cube Viewer', width=width, height=height, resizable=True)
+    dpg.setup_dearpygui()
+    dpg.show_viewport()
+
+def mouse_drag_handler(sender, app_data):
+    pass  # Placeholder for future use
+
+def render_ui():
+    dpg.render_dearpygui_frame()
