@@ -7,13 +7,15 @@ from ui import create_ui, render_ui
 pg.init()
 
 WIDTH, HEIGHT = 800, 600
-SSAA_SCALE = 12  # Scale factor for SSAA, use 2 for 2x SSAA
+SSAA_SCALE = 2  # Scale factor for SSAA, use 2 for 2x SSAA
 
 # Define high-resolution surface for SSAA
 high_res_surface = pg.Surface((WIDTH * SSAA_SCALE, HEIGHT * SSAA_SCALE))
 
 screen = pg.display.set_mode((WIDTH, HEIGHT))
 pg.display.set_caption("3D Camera Orbit with Mouse")
+
+font = pg.font.SysFont(None, 36)
 
 # Define vertices, edges, faces, and face colors
 vertices = np.array([
@@ -244,6 +246,11 @@ def main():
                 face_center_screen = project([face_center])[0]
                 ray_color = (255, 0, 0) if not is_face_facing_light(face_normal, face_center) else (255, 255, 255)
                 pg.draw.line(screen, ray_color, light_pos_screen, face_center_screen, 1)
+        
+        # Calculate and display FPS
+        fps = clock.get_fps()
+        fps_text = font.render(f"FPS: {int(fps)}", True, (255, 255, 255))
+        screen.blit(fps_text, (2, 2))
 
         render_ui()
         pg.display.flip()

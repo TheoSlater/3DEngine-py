@@ -36,15 +36,14 @@ def rotate_y(angle):
         [-sin_angle, 0, cos_angle]
     ])
 
-def project(points, scale=100):
-    return [(int(p[0] * scale) + WIDTH // 2, int(p[1] * scale) + HEIGHT // 2) for p in points]
+def project(points, scale=100, width=800, height=600):
+    return [(int(p[0] * scale) + width // 2, int(p[1] * scale) + height // 2) for p in points]
 
 def compute_face_normal(face_vertices):
     """Calculate the normal vector for a face."""
     if len(face_vertices) < 3:
         raise ValueError("Face vertices must contain at least 3 vertices.")
     
-    # Use the first triangle to compute the normal
     v0, v1, v2 = face_vertices[:3]
     edge1 = v1 - v0
     edge2 = v2 - v0
@@ -52,14 +51,14 @@ def compute_face_normal(face_vertices):
     norm_length = np.linalg.norm(normal)
     return normal / norm_length if norm_length > 0 else normal
 
-def compute_lighting(normal, face_center):
+def compute_lighting(normal, face_center, light_pos, ambient_light, diffuse_light):
     """Compute the lighting for a face based on its normal and the light source position."""
     light_dir = light_pos - face_center
     light_dir /= np.linalg.norm(light_dir)
     diffuse = max(np.dot(normal, light_dir), 0) * diffuse_light
     return ambient_light + diffuse
 
-def is_face_facing_light(normal, face_center):
+def is_face_facing_light(normal, face_center, light_pos):
     """Check if the face is facing the light source."""
     light_dir = light_pos - face_center
     light_dir /= np.linalg.norm(light_dir)
@@ -113,20 +112,38 @@ def main():
 
         cam_pos = camera.get_position()
         translated_vertices = np.array(vertices)
-        rotation_matrix = np.dot(rotate_x(camera.angle_pitch), rotate_y(camera.angle_yaw))
-        rotated_vertices = np.dot(translated_vertices, rotation_matrix)
-        projected_vertices = project(rotated_vertices)
+        
+        try:
+            rotation_matrix_x = rotate_x(camera.angle_pitch)
+            rotation_matrix_y = rotate_y(camera.angle_yaw)
+            rotation_matrix = np.dot(rotation_matrix_x, rotation_matrix_y)
+            print(f"Rotation matrix X:\n{rotation_matrix_x}")
+            print(f"Rotation matrix Y:\n{rotation_matrix_y}")
+            print(f"Combined rotation matrix:\n{rotation_matrix}")
+
+            rotated_vertices = np.dot(translated_vertices, rotation_matrix)
+            print(f"Rotated vertices:\n{rotated_vertices}")
+
+            projected_vertices = project(rotated_vertices, width=WIDTH, height=HEIGHT)
+            print(f"Projected vertices:\n{projected_vertices}")
+            
+        except AssertionError as e:
+            print(f"AssertionError: {e}")
+            raise
+        except Exception as e:
+            print(f"Exception: {e}")
+            raise
 
         face_distances = []
         for i, face in enumerate(faces):
             face_vertices = [rotated_vertices[v] for v in face]
             if len(face_vertices) < 3:
-                continue  # Skip faces with fewer than 3 vertices
+                continue
             
             face_center = np.mean(face_vertices, axis=0)
             face_normal = compute_face_normal(face_vertices)
 
-            face_lighting = compute_lighting(face_normal, face_center)
+            face_lighting = compute_lighting(face_normal, face_center, light_pos, ambient_light, diffuse_light)
             face_color = np.array([255, 255, 255]) * face_lighting
             face_color = np.clip(face_color, 0, 255).astype(int)
             face_distance = np.mean([v[2] for v in face_vertices])
@@ -138,17 +155,17 @@ def main():
             for _, _, polygon, color, _, _ in face_distances:
                 pg.draw.polygon(high_res_surface, tuple(color), [(int(p[0] * SSAA_SCALE), int(p[1] * SSAA_SCALE)) for p in polygon])
 
-            scaled_surface = pg.transform.scale(high_res_surface, (WIDTH, HEIGHT))
+            scaled_surface = pg.transform.smoothscale(high_res_surface, (WIDTH, HEIGHT))
             screen.blit(scaled_surface, (0, 0))
         else:
             for _, _, polygon, color, _, _ in face_distances:
                 pg.draw.polygon(screen, tuple(color), polygon)
 
         if show_rays:
-            light_pos_screen = project([light_pos])[0]
+            light_pos_screen = project([light_pos], width=WIDTH, height=HEIGHT)[0]
             for _, _, polygon, _, face_center, face_normal in face_distances:
-                face_center_screen = project([face_center])[0]
-                ray_color = (255, 0, 0) if not is_face_facing_light(face_normal, face_center) else (255, 255, 255)
+                face_center_screen = project([face_center], width=WIDTH, height=HEIGHT)[0]
+                ray_color = (255, 0, 0) if not is_face_facing_light(face_normal, face_center, light_pos) else (255, 255, 255)
                 pg.draw.line(screen, ray_color, light_pos_screen, face_center_screen, 1)
 
         fps = clock.get_fps()
@@ -160,4 +177,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
