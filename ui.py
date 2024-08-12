@@ -6,12 +6,9 @@ def create_ui(width, height, button_callback, color_callbacks, face_colors):
     with dpg.handler_registry():
         dpg.add_mouse_drag_handler(callback=mouse_drag_handler)
 
-    # Define the resize callback function
     def resize_ui(sender, app_data):
         new_width, new_height = dpg.get_viewport_client_width(), dpg.get_viewport_client_height()
-        # Adjust the size of the main UI window
         dpg.configure_item("ui_window", width=new_width // 4, height=new_height - 20)
-        # Adjust the size of the child window to fill the parent window
         dpg.configure_item("child_window", width=-1, height=-1)
 
     dpg.set_viewport_resize_callback(resize_ui)
@@ -24,7 +21,6 @@ def create_ui(width, height, button_callback, color_callbacks, face_colors):
                 dpg.add_button(label="Randomize", callback=button_callback)
 
                 for i in range(6):
-                    # Define a closure to ensure that i is captured correctly
                     def create_callback(index):
                         return lambda sender, app_data: color_callbacks[index](sender, app_data)
 
@@ -35,6 +31,14 @@ def create_ui(width, height, button_callback, color_callbacks, face_colors):
                         callback=callback,
                         default_value=face_colors[i] + (255,)
                     )
+            
+            # Add a checkbox to toggle raycasting lines
+            def toggle_raycasting(sender, app_data):
+                # Toggle raycasting lines flag
+                global show_rays
+                show_rays = app_data
+
+            dpg.add_checkbox(label="Show Raycasting Lines", callback=toggle_raycasting)
 
     dpg.create_viewport(title='3D Cube Viewer', width=width, height=height, resizable=True)
     dpg.setup_dearpygui()

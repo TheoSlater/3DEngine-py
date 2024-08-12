@@ -43,8 +43,8 @@ face_colors = [
     (0, 255, 255)  # Cyan
 ]
 
-# Light source position and intensity
-light_pos = np.array([0, 5, 5])
+# Define a static light source position (e.g., top-right)
+light_pos = np.array([5, 5, 5])  # Static light source
 ambient_light = 0.2
 diffuse_light = 0.8
 
@@ -148,12 +148,17 @@ def main():
     # Pass the update_face_colors function and color picker callbacks
     create_ui(WIDTH, HEIGHT, update_face_colors, color_callbacks, face_colors)
     
+    show_rays = False  # Flag to toggle raycasting lines
+
     running = True
 
     while running:
         for event in pg.event.get():
             if event.type == pg.QUIT:
                 running = False
+            if event.type == pg.KEYDOWN:
+                if event.key == pg.K_r:  # Toggle raycasting lines with the 'R' key
+                    show_rays = not show_rays
 
         camera.control()
         screen.fill((0, 0, 0))
@@ -173,25 +178,28 @@ def main():
             face_color = np.array(face_colors[i]) * face_lighting
             face_color = np.clip(face_color, 0, 255).astype(int)
             face_distance = calculate_face_depth(face_vertices)
-            face_distances.append((i, face_distance, [projected_vertices[v] for v in face], face_color))
+            face_distances.append((i, face_distance, [projected_vertices[v] for v in face], face_color, face_center))
 
         # Sort faces based on their distance from the camera (further faces first)
         face_distances.sort(key=lambda x: x[1], reverse=True)
 
         # Draw faces in the sorted order to ensure proper depth rendering
-        for i, _, polygon, color in face_distances:
+        for i, _, polygon, color, _ in face_distances:
             pg.draw.polygon(screen, tuple(color), polygon)
 
-        # HACK: Issues with seeing outlines through cube faces. Disabling for now.
-        #for edge in edges:
-            #pg.draw.line(screen, (0, 0, 0), projected_vertices[edge[0]], projected_vertices[edge[1]], 2)
-
+        if show_rays:
+            # Draw lines from light source to the cube
+            light_pos_screen = project([light_pos])[0]
+            for _, _, polygon, _, face_center in face_distances:
+                face_center_screen = project([face_center])[0]
+                pg.draw.line(screen, (255, 255, 255), light_pos_screen, face_center_screen, 1)
+        
         render_ui()
         pg.display.flip()
         clock.tick(60)
 
     dpg.destroy_context()
     pg.quit()
-
+    
 if __name__ == "__main__":
     main()
