@@ -132,6 +132,10 @@ class Camera:
         self.angle_pitch = self.angle_yaw = 0
         self.distance = 5
         self.rotation_speed = 0.01
+        self.scale_factor = 1.0  # Scale factor for the cube
+        self.zoom_speed = 0.1    # Speed at which the cube scales
+        self.min_scale = 0.05     # Minimum scale factor
+        self.max_scale = 10.0     # Maximum scale factor
         self.last_mouse_pos = None
 
     def control(self):
@@ -151,10 +155,19 @@ class Camera:
         z = self.distance * np.cos(self.angle_pitch) * np.cos(self.angle_yaw)
         return np.array([x, y, z])
 
+    def zoom_in(self):
+        self.scale_factor = max(self.min_scale, self.scale_factor - self.zoom_speed)
+        #print(f"Zoomed in: New scale factor = {self.scale_factor}")
+
+    def zoom_out(self):
+        self.scale_factor = min(self.max_scale, self.scale_factor + self.zoom_speed)
+        #print(f"Zoomed out: New scale factor = {self.scale_factor}")
+
+
 def main():
     clock = pg.time.Clock()
     camera = Camera()
-    
+
     show_rays = False  # Flag to toggle raycasting lines
     lighting_enabled = True  # Flag to toggle lighting
     ssaa_enabled = False  # Flag to toggle SSAA
@@ -165,7 +178,7 @@ def main():
         nonlocal show_rays
         show_rays = app_data
         print(f"Raycasting {'enabled' if show_rays else 'disabled'}")
-    
+
     def toggle_lighting(sender, app_data):
         nonlocal lighting_enabled
         lighting_enabled = app_data
@@ -175,18 +188,16 @@ def main():
         nonlocal ssaa_enabled
         ssaa_enabled = app_data
         print(f"SSAA {'enabled' if ssaa_enabled else 'disabled'}")
-        
+
     def toggle_rainbow_mode(sender, app_data):
         nonlocal rainbow_mode
         rainbow_mode = app_data
         print(f"Rainbow mode {'enabled' if rainbow_mode else 'disabled'}")
 
-    # Ensure that each face has its own callback correctly initialized
     color_callbacks = [lambda sender, app_data, i=i: update_color_picker(i, sender, app_data) for i in range(6)]
-    
-    # Pass the update_face_colors function and color picker callbacks
+
     create_ui(WIDTH, HEIGHT, update_face_colors, color_callbacks, face_colors, toggle_raycasting, toggle_lighting, toggle_ssaa, toggle_rainbow_mode)
-    
+
     running = True
 
     while running:
@@ -199,26 +210,27 @@ def main():
                 if event.key == pg.K_l:  # Toggle lighting with the 'L' key
                     lighting_enabled = not lighting_enabled
                     print(f"Lighting {'enabled' if lighting_enabled else 'disabled'}")
+            if event.type == pg.MOUSEBUTTONDOWN:
+                if event.button == 4:  # Scroll up (zoom in)
+                    camera.zoom_in()
+                elif event.button == 5:  # Scroll down (zoom out)
+                    camera.zoom_out()
 
         camera.control()
 
-        # Update the rainbow mode colors
         if rainbow_mode:
             hue = (hue + 1) % 360  # Increment hue and wrap around at 360
             for i in range(6):
                 c = pg.Color(0, 0, 0)
-                # Ensure the hue stays within the 0-360 range by using modulo operation
                 adjusted_hue = (hue + i * 60) % 360
-                c.hsva = (adjusted_hue, 100, 100, 100)  # Set HSVA with hue in range, and alpha set to 100
+                c.hsva = (adjusted_hue, 100, 100, 100)
                 face_colors[i] = tuple(c)[:3]  # Only keep the RGB components
 
-
-        # Clear high-resolution surface if SSAA is enabled
         if ssaa_enabled:
             high_res_surface.fill((0, 0, 0))
 
         cam_pos = camera.get_position()
-        translated_vertices = vertices
+        translated_vertices = vertices * camera.scale_factor  # Scale the vertices
         rotation_matrix = np.dot(rotate_x(camera.angle_pitch), rotate_y(camera.angle_yaw))
         rotated_vertices = np.dot(translated_vertices, rotation_matrix)
         projected_vertices = project(rotated_vertices)
@@ -239,25 +251,18 @@ def main():
             face_distance = calculate_face_depth(face_vertices)
             face_distances.append((i, face_distance, [projected_vertices[v] for v in face], face_color, face_center, face_normal))
 
-        # Sort faces based on their distance from the camera (further faces first)
         face_distances.sort(key=lambda x: x[1], reverse=True)
 
-        # Draw faces in the sorted order to ensure proper depth rendering
         if ssaa_enabled:
-            # Draw faces on the high-resolution surface
             for i, _, polygon, color, _, _ in face_distances:
-                # Use anti-aliased polygons if desired
                 pg.draw.polygon(high_res_surface, tuple(color), [(int(p[0] * SSAA_SCALE), int(p[1] * SSAA_SCALE)) for p in polygon])
             
-            # Downsample high-resolution surface to the final screen resolution
             scaled_surface = pg.transform.scale(high_res_surface, (WIDTH, HEIGHT))
             screen.blit(scaled_surface, (0, 0))
         else:
             for i, _, polygon, color, _, _ in face_distances:
-                # Draw faces directly on the screen
                 pg.draw.polygon(screen, tuple(color), polygon)
         
-        # Add Raycasting lines
         if show_rays:
             light_pos_screen = project([light_pos])[0]
             for _, _, polygon, _, face_center, face_normal in face_distances:
@@ -265,7 +270,6 @@ def main():
                 ray_color = (255, 0, 0) if not is_face_facing_light(face_normal, face_center) else (255, 255, 255)
                 pg.draw.line(screen, ray_color, light_pos_screen, face_center_screen, 1)
         
-        # Calculate and display FPS
         fps = clock.get_fps()
         fps_text = font.render(f"FPS: {int(fps)}", True, (255, 255, 255))
         screen.blit(fps_text, (2, 2))
@@ -279,5 +283,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
