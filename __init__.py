@@ -158,6 +158,8 @@ def main():
     show_rays = False  # Flag to toggle raycasting lines
     lighting_enabled = True  # Flag to toggle lighting
     ssaa_enabled = False  # Flag to toggle SSAA
+    rainbow_mode = False  # Flag to toggle rainbow mode
+    hue = 0  # Initial hue value for rainbow mode
 
     def toggle_raycasting(sender, app_data):
         nonlocal show_rays
@@ -173,12 +175,17 @@ def main():
         nonlocal ssaa_enabled
         ssaa_enabled = app_data
         print(f"SSAA {'enabled' if ssaa_enabled else 'disabled'}")
+        
+    def toggle_rainbow_mode(sender, app_data):
+        nonlocal rainbow_mode
+        rainbow_mode = app_data
+        print(f"Rainbow mode {'enabled' if rainbow_mode else 'disabled'}")
 
     # Ensure that each face has its own callback correctly initialized
     color_callbacks = [lambda sender, app_data, i=i: update_color_picker(i, sender, app_data) for i in range(6)]
     
     # Pass the update_face_colors function and color picker callbacks
-    create_ui(WIDTH, HEIGHT, update_face_colors, color_callbacks, face_colors, toggle_raycasting, toggle_lighting, toggle_ssaa)
+    create_ui(WIDTH, HEIGHT, update_face_colors, color_callbacks, face_colors, toggle_raycasting, toggle_lighting, toggle_ssaa, toggle_rainbow_mode)
     
     running = True
 
@@ -194,6 +201,17 @@ def main():
                     print(f"Lighting {'enabled' if lighting_enabled else 'disabled'}")
 
         camera.control()
+
+        # Update the rainbow mode colors
+        if rainbow_mode:
+            hue = (hue + 1) % 360  # Increment hue and wrap around at 360
+            for i in range(6):
+                c = pg.Color(0, 0, 0)
+                # Ensure the hue stays within the 0-360 range by using modulo operation
+                adjusted_hue = (hue + i * 60) % 360
+                c.hsva = (adjusted_hue, 100, 100, 100)  # Set HSVA with hue in range, and alpha set to 100
+                face_colors[i] = tuple(c)[:3]  # Only keep the RGB components
+
 
         # Clear high-resolution surface if SSAA is enabled
         if ssaa_enabled:
@@ -261,3 +279,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
